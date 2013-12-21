@@ -1,33 +1,25 @@
 package image;
 
-import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import javax.imageio.ImageIO;
-import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.Timer;
 
 public class Framework {
-
-	private static final int PICTURE_SHOW_MILLISECOND = 2000;
-
-	private static final int PICTURE_2_SHOW_MILLISECOND = 2000;
-
-	private static final int BLANK_SHOW_MILLISECOND = 100;
-
-	ArrayList<FilePair> imagePairs = new ArrayList<FilePair>();
 	
 	JFrame frame;
+
+	Options options;
 	
-	public Framework()  {
+	ArrayList<FilePair> imagePairs = new ArrayList<FilePair>();
+
+	public Framework(Options options)  {
 		frame = new JFrame();
 		
         frame.setLayout(new FlowLayout());
@@ -35,16 +27,46 @@ public class Framework {
         frame.setVisible(true);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setTitle("Test");
+        
+        this.options = options;
+        
+        
+	//	if (!getOptions()) return;
+		
+		 picSwitch = new Timer(options.picMilli, picSwitchListener);
+		 
+		 blank = new FlickerTimer(options.blankMilli, blankListener);
+		
+		 imagePairs = options.imagePairs;
+		 
+		 main.setInitialDelay(options.perPicMilli);
 	}
 
+	
+	SwitchTimer main = new SwitchTimer(0, new ActionListener() {
+		
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			go = e.getWhen();
+			
+			picSwitch.stop();				
+			blank.reset();
+			
+			frame.remove(currentImages[0]);
+			frame.remove(currentImages[1]);
+			frame.validate();
+			frame.repaint();
+		}
+		
+	});
 
 	public void run() {
 		for (FilePair fp : imagePairs){
+			//frame.setSize(fp.first.getIconWidth(), fp.first.getIconHeight());
 			testPair(fp);
 		//	JLabel ll = new JLabel();
 		//	ll.setIcon(fp.first);
 		//	ll.setBackground(Color.red);
-			//frame.setSize(fp.first.getIconWidth(), fp.first.getIconHeight());
 		//	ll.validate();
 			//frame.repaint();
 			//frame.add(ll);
@@ -52,142 +74,101 @@ public class Framework {
 		}
 	}
 	
-	boolean go = true;
-	Stage stage = Stage.STAGE_0;
+	
+	ActionListener picSwitchListener = new ActionListener() {
 
-	ActionListener a = new ActionListener() {
 		@Override
 		public void actionPerformed(ActionEvent e) {
-			switchImage();
-			e.getWhen(); // TODO make this work
+			frame.remove(currentImages[0]);
+			frame.remove(currentImages[1]);
+			frame.validate();
+			frame.repaint();
+
+			
+			picSwitch.stop();
+			blank.start();
 		}
-		
 	};
 	
-	Timer currentTimer;
-	
-	Timer picSwitch1 = new Timer(PICTURE_SHOW_MILLISECOND, a);
-	Timer picSwitch2 = new Timer(PICTURE_2_SHOW_MILLISECOND, a);
-	
-	Timer blank = new Timer(BLANK_SHOW_MILLISECOND, a);
+	ActionListener blankListener = new ActionListener() {
+		
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			if (blank.chooseFirst()) frame.add(currentImages[0]);
+			else frame.add(currentImages[1]);
+			frame.validate();
+			frame.repaint();
 
+			blank.stop();
+			blank.toggle();
+						
+			picSwitch.start();
+		}
+	};
+		
+	FlickerTimer blank;
+	Timer picSwitch;
+	
 	JLabel[] currentImages = new JLabel[2];
+	
+	
+
+	
+	volatile long go;
 	
 	public void testPair(FilePair fp){
 		
+		go = 0;
+		
         JLabel image1 = new JLabel();
         image1.setIcon(fp.first);
-        
+
         JLabel image2 = new JLabel();
         image2.setIcon(fp.second);
 
         currentImages[0] = image1;
         currentImages[1] = image2;
+		        
+		frame.addKeyListener(main);
 		
-		Timer timer = new Timer(30000, new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				moveToNext(e.getWhen());
-			}
-			
-		});
-		
-		currentTimer = picSwitch1;
-		
-		//frame.add(image2);
-		frame.repaint();
+		frame.add(currentImages[0]);
 		frame.validate();
 		frame.repaint();
-		timer.start();
-		switchImage();
 		
-		while (go) {
-//			if (stage == Stage.STAGE_1) {
-//				currentTimer = picSwitch1;
-//			}
-//			else if (stage == Stage.STAGE_2) {
-//				currentTimer = blank;
-//			}
-//			else if (stage == Stage.STAGE_3) {
-//				currentTimer = picSwitch2;
-//			}
-		}
+		picSwitch.start();
+		blank.toggle();
+		main.start();
 		
-		timer.stop();
+		while (go == 0) {}
+		frame.removeKeyListener(main);
+
+		fp.result = go;
+		
+		main.stop();
 	}
+
 	
-	protected void switchImage() {
-		//ll.validate();
-		//frame.repaint();
-		//frame.add(ll);
-
-		if (stage == Stage.STAGE_0) {
-			System.out.println("stage 0");
-			stage = Stage.STAGE_1;
-			System.out.println(frame.getComponents());
-			//frame.remove(1);
-			frame.add(currentImages[0]);
-			currentTimer = picSwitch1;
-		}
-		else if (stage == Stage.STAGE_1) {
-			System.out.println("stage 1");
-
-			stage = Stage.STAGE_2;
-			frame.removeAll();
-			currentTimer = blank;
-		}
-		else if (stage == Stage.STAGE_2) {
-			System.out.println("stage 2");
-
-			stage = Stage.STAGE_3;
-			frame.add(currentImages[1]);
-			currentTimer = picSwitch2;
-
-		}
-		else if (stage == Stage.STAGE_3) {
-			System.out.println("stage 3");
-
-			stage = Stage.STAGE_1;
-			frame.remove(1);
-			frame.add(currentImages[0]);
-			currentTimer = picSwitch1;
-
-		}
-		frame.repaint();
-		frame.validate();
-		frame.repaint();
-		currentTimer.restart();
-	}
-
-
-	protected void moveToNext(long l) {
-		go = false;
-	}
-
 	public void shutdown() {
+		for (FilePair fp : imagePairs){
+			if (fp.result > options.perPicMilli) fp.result = options.perPicMilli;
+			System.out.println(fp.result / 1000);
+			try {
+				options.output.write(fp.name + ": " + fp.result + "ms");	
+				options.output.newLine();
+				System.out.println("AGEAGE");
+			} catch (IOException e) {
+				System.err.println("error writing to fle");
+			}
+		}
+		try {
+			options.output.close();
+		} catch (IOException e) {
+			JOptionPane.showMessageDialog(null, "Error printing to file.");
+		}
 		frame.setVisible(false);
 		frame.dispose();
 	}
 
-	/**
-	 * @param args
-	 */
-	public static void main(String[] args) {
-		Framework framework = new Framework();
-		try {
-			framework.getFile();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		framework.run();
-		//framework.shutdown();
-	}
 
-
-	private void getFile()throws IOException {
-        ImageIcon n = new ImageIcon(ImageIO.read(new File("src/images/f.png")));
-        imagePairs.add(new FilePair(n,n));
-	}
 
 }
